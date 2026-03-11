@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { default: makeWASocket, useMultiFileAuthState, delay, Browsers, makeCacheableSignalKeyStore } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, delay, Browsers } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 
 const app = express();
@@ -15,47 +15,37 @@ app.get('/pairing', async (req, res) => {
     
     phone = phone.replace(/[^0-9]/g, '');
 
-    // Kreye yon folder sesyon inik pou chak tantativ
-    const sessionPath = `./session_${Math.random().toString(36).substring(7)}`;
+    // Kreye yon folder sesyon inik pou evite konfli sou Render
+    const sessionDir = `./session_${Date.now()}`;
 
     try {
-        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
         
         const client = makeWASocket({
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
-            },
+            auth: state,
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            // N ap itilize yon Browser ID ki pi resan pou WhatsApp pa bloke l
-            browser: Browsers.macOS("Desktop")
+            browser: Browsers.ubuntu("Chrome")
         });
 
-        client.ev.on('creds.update', saveCreds);
-
-        // Tann yon ti moman anvan n mande kòd la
-        await delay(5000); 
+        // Tann 5 segonn pou asire koneksyon an fèt
+        await delay(5000);
 
         if (!client.authState.creds.registered) {
             const code = await client.requestPairingCode(phone);
-            if (!res.headersSent) {
-                res.json({ code: code });
-            }
+            res.json({ code: code });
         }
 
-        // Netwaye folder a apre 2 minit pou pa ankonbre Render
+        // Netwaye folder a apre yon ti tan
         setTimeout(() => {
-            try {
-                if (fs.existsSync(sessionPath)) {
-                    fs.rmSync(sessionPath, { recursive: true, force: true });
-                }
-            } catch (e) { console.error("Error cleaning session"); }
-        }, 120000);
+            if (fs.existsSync(sessionDir)) {
+                fs.rmSync(sessionDir, { recursive: true, force: true });
+            }
+        }, 30000);
 
     } catch (err) {
         console.error(err);
-        if (!res.headersSent) res.status(500).json({ error: "Eseye ankò" });
+        res.json({ error: "Eseye ankò nan 1 minit" });
     }
 });
 
@@ -64,5 +54,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server aktif sou port ${PORT}`);
+    console.log(`Server ap kouri sou ${PORT}`);
 });
