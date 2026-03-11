@@ -1,18 +1,55 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="ht">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Queen Colambia Pairing</title>
+    <title>QUEEN COLAMBIA PAIRING</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <h1>QUEEN COLAMBIA PAIRING</h1>
-        <p>Mete nimewo telefòn ou pou w resevwa kòd la</p>
+        <p>Mete nimewo telefòn ou (ak kòd peyi a) pou w resevwa kòd bot la.</p>
+        
         <input type="number" id="number" placeholder="Eg: 50948247470">
-        <button onclick="getPairingCode()">Resevwa Kòd</button>
-        <div id="display-code"></div>
+        <br>
+        <button onclick="getPairingCode()">JENERE KÒD</button>
+
+        <div id="display-code">
+            </div>
     </div>
+
+    <script>
+        async function getPairingCode() {
+            const number = document.getElementById('number').value;
+            const display = document.getElementById('display-code');
+            
+            if (!number) {
+                display.innerHTML = "<span style='color: red;'>Tanpri antre yon nimewo!</span>";
+                return;
+            }
+
+            display.innerHTML = "<p style='color: yellow;'>Veye WhatsApp ou... n ap jenere kòd la...</p>";
+
+            try {
+                // Lè w fin deploye sou Render, l ap mache otomatikman ak URL la
+                const response = await fetch(`/pairing?number=${number}`);
+                const data = await response.json();
+
+                if (data.code) {
+                    display.innerHTML = `
+                        <div style="margin-top: 20px;">
+                            <p style="color: #fff;">KÒD PAIRING OU SE:</p>
+                            <h2 style="background: #00ff00; color: #000; padding: 10px; display: inline-block; letter-spacing: 5px;">${data.code}</h2>
+                        </div>
+                    `;
+                } else {
+                    display.innerHTML = "<span style='color: red;'>Erè: Nimewo a pa kòrèk oswa server a okipe.</span>";
+                }
+            } catch (err) {
+                display.innerHTML = "<span style='color: red;'>Server a pa reponn. Asire w ou deploye l sou Render.</span>";
+            }
+        }
+    </script>
 </body>
 </html>
