@@ -1,6 +1,5 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const { default: makeWASocket, useMultiFileAuthState, delay, Browsers } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 
@@ -13,41 +12,43 @@ app.get('/pairing', async (req, res) => {
     let phone = req.query.number;
     if (!phone) return res.json({ error: "Nimewo manke" });
     
-    // Netwaye nimewo a (retire espas oswa plis)
     phone = phone.replace(/[^0-9]/g, '');
 
-    // Netwaye vye sesyon anvan chak demand
-    if (fs.existsSync('./session')) {
-        fs.rmSync('./session', { recursive: true, force: true });
-    }
+    // Nou kreye yon non folder sesyon ki baze sou nimewo a pou evite konfli
+    const sessionPath = `./session_${phone}`;
 
     try {
-        const { state, saveCreds } = await useMultiFileAuthState('./session');
+        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
         
         const client = makeWASocket({
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            // N ap itilize Safari sou MacOS pou WhatsApp ka aksepte l pi fasil
-            browser: ["Ubuntu", "Chrome", "20.0.04"]
+            // Sa a se kle a: Force yon browser ki pa sispèk
+            browser: ["Chrome (Linux)", "Chrome", "110.0.5481.177"]
         });
 
         client.ev.on('creds.update', saveCreds);
 
-        // Si nou pa anrejistre, n ap mande kòd la
-        if (!client.authState.creds.registered) {
-            await delay(2000); 
-            const code = await client.requestPairingCode(phone);
-            
-            if (!res.headersSent) {
-                res.json({ code: code });
+        // Nou mande kòd la imedyatman
+        setTimeout(async () => {
+            try {
+                const code = await client.requestPairingCode(phone);
+                if (!res.headersSent) {
+                    res.json({ code: code });
+                }
+            } catch (error) {
+                console.error("Erè kòd:", error);
+                if (!res.headersSent) res.status(500).json({ error: "WhatsApp refize demand lan" });
             }
-        }
+        }, 3000);
+
+        // Sekirite: Apre 1 minit, nou fèmen koneksyon sa si l pa itilize
+        setTimeout(() => { client.end(); }, 60000);
+
     } catch (err) {
         console.error(err);
-        if (!res.headersSent) {
-            res.status(500).json({ error: "Eseye ankò nan yon ti moman" });
-        }
+        if (!res.headersSent) res.status(500).json({ error: "Server Error" });
     }
 });
 
@@ -56,5 +57,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server Queen Colambia kouri sou port ${PORT}`);
+    console.log(`Bot Queen Colambia aktif sou port ${PORT}`);
 });
