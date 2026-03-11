@@ -11,9 +11,12 @@ app.use(express.static(path.join(__dirname, '.')));
 
 app.get('/pairing', async (req, res) => {
     let phone = req.query.number;
-    if (!phone) return res.json({ error: "Tanpri bay yon nimewo" });
+    if (!phone) return res.json({ error: "Nimewo manke" });
+    
+    // Netwaye nimewo a (retire espas oswa plis)
+    phone = phone.replace(/[^0-9]/g, '');
 
-    // Netwaye vye sesyon pou evite blokaj
+    // Netwaye vye sesyon anvan chak demand
     if (fs.existsSync('./session')) {
         fs.rmSync('./session', { recursive: true, force: true });
     }
@@ -25,17 +28,26 @@ app.get('/pairing', async (req, res) => {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            browser: Browsers.ubuntu("Chrome") // Sa ede WhatsApp rekonèt koneksyon an pi byen
+            // N ap itilize Safari sou MacOS pou WhatsApp ka aksepte l pi fasil
+            browser: ["Ubuntu", "Chrome", "20.0.04"]
         });
 
+        client.ev.on('creds.update', saveCreds);
+
+        // Si nou pa anrejistre, n ap mande kòd la
         if (!client.authState.creds.registered) {
-            await delay(3000); // Bay server a 3 segonn pou l prepare
-            let code = await client.requestPairingCode(phone);
-            res.json({ code: code });
+            await delay(2000); 
+            const code = await client.requestPairingCode(phone);
+            
+            if (!res.headersSent) {
+                res.json({ code: code });
+            }
         }
     } catch (err) {
-        console.log(err);
-        res.status(500).json({ error: "Erè nan jenerasyon kòd la" });
+        console.error(err);
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Eseye ankò nan yon ti moman" });
+        }
     }
 });
 
@@ -44,5 +56,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server ap kouri sou port ${PORT}`);
+    console.log(`Server Queen Colambia kouri sou port ${PORT}`);
 });
