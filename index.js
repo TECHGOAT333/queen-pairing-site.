@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, delay, Browsers } = require("@whiskeysockets/baileys");
+const fs = require('fs');
+const { default: makeWASocket, useMultiFileAuthState, delay, Browsers, makeCacheableSignalKeyStore } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 
 const app = express();
@@ -14,41 +15,47 @@ app.get('/pairing', async (req, res) => {
     
     phone = phone.replace(/[^0-9]/g, '');
 
-    // Nou kreye yon non folder sesyon ki baze sou nimewo a pou evite konfli
-    const sessionPath = `./session_${phone}`;
+    // Kreye yon folder sesyon inik pou chak tantativ
+    const sessionPath = `./session_${Math.random().toString(36).substring(7)}`;
 
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
         
         const client = makeWASocket({
-            auth: state,
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
+            },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            // Sa a se kle a: Force yon browser ki pa sispèk
-            browser: ["Chrome (Linux)", "Chrome", "110.0.5481.177"]
+            // N ap itilize yon Browser ID ki pi resan pou WhatsApp pa bloke l
+            browser: Browsers.macOS("Desktop")
         });
 
         client.ev.on('creds.update', saveCreds);
 
-        // Nou mande kòd la imedyatman
-        setTimeout(async () => {
-            try {
-                const code = await client.requestPairingCode(phone);
-                if (!res.headersSent) {
-                    res.json({ code: code });
-                }
-            } catch (error) {
-                console.error("Erè kòd:", error);
-                if (!res.headersSent) res.status(500).json({ error: "WhatsApp refize demand lan" });
-            }
-        }, 3000);
+        // Tann yon ti moman anvan n mande kòd la
+        await delay(5000); 
 
-        // Sekirite: Apre 1 minit, nou fèmen koneksyon sa si l pa itilize
-        setTimeout(() => { client.end(); }, 60000);
+        if (!client.authState.creds.registered) {
+            const code = await client.requestPairingCode(phone);
+            if (!res.headersSent) {
+                res.json({ code: code });
+            }
+        }
+
+        // Netwaye folder a apre 2 minit pou pa ankonbre Render
+        setTimeout(() => {
+            try {
+                if (fs.existsSync(sessionPath)) {
+                    fs.rmSync(sessionPath, { recursive: true, force: true });
+                }
+            } catch (e) { console.error("Error cleaning session"); }
+        }, 120000);
 
     } catch (err) {
         console.error(err);
-        if (!res.headersSent) res.status(500).json({ error: "Server Error" });
+        if (!res.headersSent) res.status(500).json({ error: "Eseye ankò" });
     }
 });
 
@@ -57,5 +64,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Bot Queen Colambia aktif sou port ${PORT}`);
+    console.log(`Server aktif sou port ${PORT}`);
 });
